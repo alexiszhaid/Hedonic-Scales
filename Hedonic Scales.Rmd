@@ -1,0 +1,118 @@
+---
+title: "Hedonic Scales in Sensory Evaluation"
+author: "Alexis Zhaid Carrillo García"
+date: "2025-04-02"
+output: html_document
+bibliography: references.bib
+csl: APA.csl
+---
+
+Hedonic scales are widely used in sensory evaluation to measure how much a consumer likes or prefers a given product. These scales are essential in product development, reformulation studies, and acceptance testing.
+
+The most commonly used is the 9-point hedonic scale, ranging from “dislike extremely” to “like extremely.” However, other formats such as 7-point, 5-point, or visual analog scales are also used depending on the study goals and the target population.
+
+When analyzing data obtained from hedonic scales, analysis of variance (ANOVA) is commonly applied to determine whether significant differences exist between products. The appropriate ANOVA model depends on the experimental design — particularly on whether subjects evaluate all samples, whether repeated measurements are involved, and how many factors are under consideration [@meilgaard2016].
+
+# Choosing the Right ANOVA Design
+
+## Randomized Complete Block Design (RCBD)
+
+This is the simplest and most common approach. Each subject evaluates all samples, and subjects are treated as blocks to account for inter-subject variability.
+
+Use this design when:
+
+Each subject evaluates all samples once.
+
+No additional factors (e.g., time, group conditions) need to be modeled.
+
+### Example
+30 consumers evaluate 4 different ramen formulations in a single session. An RCBD is used where "Product" is a fixed factor and "Subject" is a blocking factor.
+
+```{r, echo=FALSE}
+library(readxl)
+
+ramen <- read_excel("ramen.xlsx")
+```
+
+```{r}
+head(ramen)
+
+ramen$Subject <- as.factor(ramen$Subject)
+ramen$Product <- as.factor(ramen$Product)
+
+model_rcbd <- aov(Likeness ~ Product + Subject, data = ramen)
+
+summary(model_rcbd)
+```
+
+> **Note:** It is essential to convert all sources of variation (e.g., panelists and samples) to factors before fitting the ANOVA model. If these variables are left as numeric or character types, R may treat them as continuous covariates or ignore them entirely, leading to incorrect model structures and misleading results. This is particularly critical in sensory data where blocking (e.g., by panelist) must be explicitly modeled.
+
+The model evaluates whether significant differences exist between the sample means while controlling for the variability caused by individual panelists. If the p-value for the **Product** factor is less than 0.05, we conclude that at least one sample differs significantly in terms of consumer acceptability.
+
+### Post-hoc Comparison with agricolae
+
+To determine which specific samples differ, we apply a Tukey HSD test using the HSD.test() function from the agricolae package. This function has the advantage of grouping means using letters, which is more intuitive for interpretation and reporting in sensory studies.
+
+```{r}
+library(agricolae)
+
+HSD_ramen <- HSD.test(model_rcbd, "Product")
+
+print(HSD_ramen$groups)
+```
+
+The post-hoc comparison using Tukey's HSD test groups the samples based on their mean acceptability scores. The grouping letters provide a quick and intuitive way to identify significant differences:
+
+- Samples that share at least one letter (e.g., "a" and "ab") are not significantly different from each other.
+
+- Samples with no letters in common (e.g., "A" and "C") are significantly different.
+
+## Repeated Measures ANOVA
+Use this model when the same subjects evaluate the same set of samples under different conditions (e.g., time, session, temperature), introducing within-subject correlation.
+
+Use this design when:
+
+The same panelists evaluate samples multiple times (e.g., over time).
+
+You want to model time or condition as an additional factor.
+
+### Example
+20 consumers rate the same 3 coffee brands in two different sessions: once before breakfast and once after breakfast
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+set.seed(123)
+library(tidyverse)
+
+# Factors
+panelists <- factor(1:20)
+samples <- factor(c("A", "B", "C"))
+sessions <- factor(c("Before", "After"))
+
+# Create full design
+datos_rep <- expand.grid(
+  Panelist = panelists,
+  Sample = samples,
+  Session = sessions
+)
+
+# Simulate acceptability scores
+datos_rep <- datos_rep %>%
+  mutate(
+    Score = sample(1:9, size = n(), replace = TRUE)
+  )
+```
+
+```{r}
+head(datos_rep)
+
+modelo_rm <- aov(Score ~ Panelist + Sample/Session, data = datos_rep)
+
+summary(modelo_rm)
+
+```
+
+The repeated measures ANOVA showed no significant differences in acceptability scores between samples (*p* = 0.372), nor between sessions (*p* = 0.959). Additionally, no significant panelist effect was detected (*p* = 0.757).
+
+Since the factor Sample did not show significant variation, no post-hoc comparison is required. Post-hoc tests such as Tukey's HSD are only recommended when the main effect or interaction is statistically significant (typically *p* < 0.05).
+
+## References
